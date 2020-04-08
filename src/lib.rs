@@ -205,3 +205,16 @@ where
         uninitialized2.assume_init(),
     )
 }
+
+unsafe fn with_uninitialized3<F, U1, U2, U3, R>(f: F) -> (R, U1, U2, U3)
+where
+    F: FnOnce(*mut U1, *mut U2, *mut U3) -> R,
+{
+    let (mut u1, mut u2, mut u3) = (
+        MaybeUninit::uninit(),
+        MaybeUninit::uninit(),
+        MaybeUninit::uninit(),
+    );
+    let res = f(u1.as_mut_ptr(), u2.as_mut_ptr(), u3.as_mut_ptr());
+    (res, u1.assume_init(), u2.assume_init(), u3.assume_init())
+}

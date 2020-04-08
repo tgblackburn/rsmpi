@@ -38,7 +38,7 @@ use crate::ffi::{MPI_Request, MPI_Status};
 
 use crate::point_to_point::Status;
 use crate::raw::traits::*;
-use crate::with_uninitialized;
+use crate::{with_uninitialized, with_uninitialized2, with_uninitialized3};
 
 /// Check if the request is `MPI_REQUEST_NULL`.
 fn is_null(request: MPI_Request) -> bool {
@@ -84,43 +84,90 @@ impl<'a, S: Scope<'a>> Drop for Request<'a, S> {
 }
 
 /// Wait for the completion of one of the requests in the vector,
-/// returns the index of the request completed and the status of the request.
+/// returning the index and status of the completed request.
 ///
 /// The completed request is removed from the vector of requests.
 ///
-/// If no Request is active None is returned.
+/// If `requests` is empty, `None` is returned.
 ///
 /// # Examples
 ///
 /// See `examples/wait_any.rs`
+///
+/// # Standard section(s)
+///
+/// 3.7.5
 pub fn wait_any<'a, S: Scope<'a>>(requests: &mut Vec<Request<'a, S>>) -> Option<(usize, Status)> {
+    if requests.is_empty() {
+        return None;
+    }
+
     let mut mpi_requests: Vec<_> = requests.iter().map(|r| r.as_raw()).collect();
-    let mut index: i32 = mpi_sys::MPI_UNDEFINED;
     let size: i32 = mpi_requests
         .len()
         .try_into()
         .expect("Error while casting usize to i32");
-    let status;
+
+    let (index, status) = unsafe {
+        let (_, index, status) = with_uninitialized2(|index, s| {
+            ffi::MPI_Waitany(size, mpi_requests.as_mut_ptr(), index, s);
+        });
+        (index, Status::from_raw(status))
+    };
+
+    let index: usize = index.try_into().expect("Error while casting i32 to usize");
+    debug_assert!(is_null(mpi_requests[index]));
+    let r = requests.remove(index);
     unsafe {
-        status = Status::from_raw(
-            with_uninitialized(|s| {
-                ffi::MPI_Waitany(size, mpi_requests.as_mut_ptr(), &mut index, s);
-                s
-            })
-            .1,
-        );
+        r.into_raw();
     }
-    if index != mpi_sys::MPI_UNDEFINED {
-        let u_index: usize = index.try_into().expect("Error while casting i32 to usize");
-        assert!(is_null(mpi_requests[u_index]));
-        let r = requests.remove(u_index);
-        unsafe {
-            r.into_raw();
-        }
-        Some((u_index, status))
-    } else {
-        None
+    Some((index, status))
+}
+
+/// Test for the completion of one of the requests in the vector. If any request is complete,
+/// returns the index and status of the completed request. If no request is complete, returns
+/// `None`.
+///
+/// The completed request is removed from the vector of requests.
+///
+/// If `requests` is empty, `None` is returned.
+///
+/// # Examples
+///
+/// See `examples/wait_any.rs`
+///
+/// # Standard section(s)
+///
+/// 3.7.5
+pub fn test_any<'a, S: Scope<'a>>(requests: &mut Vec<Request<'a, S>>) -> Option<(usize, Status)> {
+    if requests.is_empty() {
+        return None;
     }
+
+    let mut mpi_requests: Vec<_> = requests.iter().map(|r| r.as_raw()).collect();
+    let size: i32 = mpi_requests
+        .len()
+        .try_into()
+        .expect("Error while casting usize to i32");
+
+    let (index, flag, status) = unsafe {
+        let (_, index, flag, status) = with_uninitialized3(|index, flag, s| {
+            ffi::MPI_Testany(size, mpi_requests.as_mut_ptr(), index, flag, s);
+        });
+        (index, flag, Status::from_raw(status))
+    };
+
+    if flag == 0 {
+        return None;
+    }
+
+    let index: usize = index.try_into().expect("Error while casting i32 to usize");
+    debug_assert!(is_null(mpi_requests[index]));
+    let r = requests.remove(index);
+    unsafe {
+        r.into_raw();
+    }
+    Some((index, status))
 }
 
 impl<'a, S: Scope<'a>> Request<'a, S> {
