@@ -4,9 +4,7 @@ TODO: With release of 0.6.0, delete this comment and add a section devoted to v0
 
 ## Master Branch
 
-**MSRV (Unix):** 1.36.0
-
-**MSRV (Windows):** 1.40.0
+**MSRV:** 1.40.0
 
 ### Notes
 
