@@ -209,7 +209,7 @@ impl UserDatatype {
     {
         let mut newtype: MPI_Datatype = unsafe { mem::uninitialized() };
         unsafe {
-            ffi::MPI_Type_hvector(count, blocklength, stride, oldtype.as_raw(), &mut newtype);
+            ffi::MPI_Type_create_hvector(count, blocklength, stride, oldtype.as_raw(), &mut newtype);
             ffi::MPI_Type_commit(&mut newtype);
         }
         UserDatatype(newtype)

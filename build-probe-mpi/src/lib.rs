@@ -5,7 +5,7 @@
 #![warn(unused_extern_crates)]
 #![warn(unused_import_braces)]
 #![warn(unused_qualifications)]
-#![deny(warnings)]
+// #![deny(warnings)]
 
 //! Probe an environment for an installed MPI library
 //!
